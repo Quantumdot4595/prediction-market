@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "./supabase.js";
 
-const STORAGE_KEY = "crowd-signal-markets-v3";
 const DELETE_CONFIRM_TEXT = "delete";
 
 function getUserId() {
@@ -12,35 +12,6 @@ function getUserId() {
   }
   return id;
 }
-
-function loadMarkets() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {}
-  return null;
-}
-
-function saveMarkets(markets) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(markets));
-  } catch {}
-}
-
-const DEFAULT_MARKETS = [
-  {
-    id: "m1",
-    question: "Do you think Jack Sharpe is doing a good job in his presentation?",
-    category: "Live",
-    createdAt: Date.now(),
-    expiresAt: null,
-    resolved: null,
-    votes: {},
-  },
-];
 
 function getYesPercent(votes) {
   const entries = Object.values(votes || {});
@@ -65,11 +36,11 @@ function formatTimeLeft(expiresAt) {
 }
 
 function isExpired(market) {
-  return market.expiresAt && Date.now() >= market.expiresAt;
+  return market.expires_at && Date.now() >= market.expires_at;
 }
 
 function isLocked(market) {
-  return market.resolved !== null && market.resolved !== undefined || isExpired(market);
+  return (market.resolved !== null && market.resolved !== undefined) || isExpired(market);
 }
 
 function AnimatedPercent({ value }) {
@@ -87,7 +58,7 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [timeLeft, setTimeLeft] = useState(() => formatTimeLeft(market.expiresAt));
+  const [timeLeft, setTimeLeft] = useState(() => formatTimeLeft(market.expires_at));
 
   const percent = getYesPercent(market.votes);
   const total = getTotalVotes(market.votes);
@@ -100,14 +71,13 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
 
   const accentColor = resolved === "yes" ? "#22c55e" : resolved === "no" ? "#ef4444" : percent >= 60 ? "#22c55e" : percent >= 40 ? "#eab308" : "#ef4444";
 
-  // Update countdown timer
   useEffect(() => {
-    if (!market.expiresAt) return;
+    if (!market.expires_at) return;
     const interval = setInterval(() => {
-      setTimeLeft(formatTimeLeft(market.expiresAt));
+      setTimeLeft(formatTimeLeft(market.expires_at));
     }, 30000);
     return () => clearInterval(interval);
-  }, [market.expiresAt]);
+  }, [market.expires_at]);
 
   const handleDelete = () => {
     if (password.trim().toLowerCase() === DELETE_CONFIRM_TEXT) {
@@ -136,7 +106,6 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
       onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 8px 32px ${accentColor}15`; }}
       onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
     >
-      {/* Resolved banner */}
       {resolved && (
         <div style={{
           position: "absolute", top: 0, left: 0, right: 0,
@@ -150,7 +119,6 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
         </div>
       )}
 
-      {/* Top row: category + timer + delete */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, marginTop: resolved ? 24 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -178,7 +146,6 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
         </button>
       </div>
 
-      {/* Delete confirmation */}
       {showDeleteConfirm && (
         <div style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 10 }}>
@@ -216,12 +183,10 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
         </div>
       )}
 
-      {/* Question */}
       <h3 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, lineHeight: 1.45, color: "#e8e8f0", fontFamily: "'DM Sans', sans-serif" }}>
         {market.question}
       </h3>
 
-      {/* Big percent */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
         <span style={{ fontSize: 48, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: accentColor, lineHeight: 1, letterSpacing: "-0.03em" }}>
           <AnimatedPercent value={percent} />
@@ -230,19 +195,16 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
         <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace", marginLeft: 8 }}>YES</span>
       </div>
 
-      {/* Bar */}
       <div style={{ width: "100%", height: 6, borderRadius: 3, background: "#1a1a2e", overflow: "hidden" }}>
         <div style={{ width: `${percent}%`, height: "100%", borderRadius: 3, background: `linear-gradient(90deg, ${accentColor}88, ${accentColor})`, transition: "width 0.6s cubic-bezier(0.22, 1, 0.36, 1)" }} />
       </div>
 
-      {/* Vote split */}
       <div style={{ display: "flex", justifyContent: "space-between", margin: "12px 0 20px", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,255,255,0.3)", padding: "0 2px" }}>
         <span style={{ color: "rgba(34,197,94,0.6)" }}>{yesCount} yes</span>
         <span>{total} prediction{total !== 1 ? "s" : ""}</span>
         <span style={{ color: "rgba(239,68,68,0.6)" }}>{noCount} no</span>
       </div>
 
-      {/* Vote buttons */}
       {!locked ? (
         <div style={{ display: "flex", gap: 10 }}>
           {[
@@ -268,7 +230,6 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
           ))}
         </div>
       ) : !resolved ? (
-        /* Expired but not resolved — show resolve buttons */
         <div>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 10, textAlign: "center" }}>
             Voting closed — resolve this market:
@@ -300,7 +261,6 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
         </div>
       )}
 
-      {/* Resolve buttons for non-expired, non-resolved markets */}
       {!resolved && !expired && (
         <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "center" }}>
           <button
@@ -337,8 +297,8 @@ function CreateMarketModal({ onClose, onCreate }) {
       id: "m_" + Date.now() + Math.random().toString(36).slice(2, 6),
       question: question.trim(),
       category: category.trim() || "General",
-      createdAt: Date.now(),
-      expiresAt: days > 0 ? Date.now() + days * 24 * 60 * 60 * 1000 : null,
+      created_at: Date.now(),
+      expires_at: days > 0 ? Date.now() + days * 24 * 60 * 60 * 1000 : null,
       resolved: null,
       votes: {},
     });
@@ -399,18 +359,64 @@ function CreateMarketModal({ onClose, onCreate }) {
 }
 
 export default function PredictionMarket() {
-  const [markets, setMarkets] = useState(() => loadMarkets() || DEFAULT_MARKETS);
+  const [markets, setMarkets] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
   const userId = getUserId();
 
-  // Save to localStorage whenever markets change
+  // Load markets from Supabase on mount
   useEffect(() => {
-    saveMarkets(markets);
-  }, [markets]);
+    async function fetchMarkets() {
+      const { data, error } = await supabase
+        .from("markets")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-  const handleVote = useCallback((marketId, vote) => {
-    setMarkets(prev =>
+      if (error) {
+        console.error("Failed to load markets:", error.message);
+      } else {
+        setMarkets(data || []);
+      }
+      setLoading(false);
+    }
+    fetchMarkets();
+  }, []);
+
+  // Real-time subscription — updates from ALL users appear instantly
+  useEffect(() => {
+    const channel = supabase
+      .channel("markets-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "markets" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setMarkets((prev) => {
+              if (prev.some((m) => m.id === payload.new.id)) return prev;
+              return [payload.new, ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            setMarkets((prev) =>
+              prev.map((m) => (m.id === payload.new.id ? payload.new : m))
+            );
+          } else if (payload.eventType === "DELETE") {
+            setMarkets((prev) =>
+              prev.filter((m) => m.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleVote = useCallback(async (marketId, vote) => {
+    // Optimistic update
+    setMarkets((prev) =>
       prev.map((m) => {
         if (m.id !== marketId) return m;
         if (isLocked(m)) return m;
@@ -420,25 +426,64 @@ export default function PredictionMarket() {
         return { ...m, votes: newVotes };
       })
     );
+
+    // Get current votes from DB to avoid race conditions
+    const { data: current } = await supabase
+      .from("markets")
+      .select("votes")
+      .eq("id", marketId)
+      .single();
+
+    if (current) {
+      const newVotes = { ...current.votes };
+      if (newVotes[userId] === vote) delete newVotes[userId];
+      else newVotes[userId] = vote;
+
+      await supabase
+        .from("markets")
+        .update({ votes: newVotes })
+        .eq("id", marketId);
+    }
   }, [userId]);
 
-  const handleCreate = useCallback((newMarket) => {
-    setMarkets(prev => [newMarket, ...prev]);
+  const handleCreate = useCallback(async (newMarket) => {
+    // Optimistic update
+    setMarkets((prev) => [newMarket, ...prev]);
+
+    const { error } = await supabase.from("markets").insert(newMarket);
+    if (error) console.error("Failed to create market:", error.message);
   }, []);
 
-  const handleDelete = useCallback((marketId) => {
-    setMarkets(prev => prev.filter((m) => m.id !== marketId));
+  const handleDelete = useCallback(async (marketId) => {
+    // Optimistic update
+    setMarkets((prev) => prev.filter((m) => m.id !== marketId));
+
+    const { error } = await supabase.from("markets").delete().eq("id", marketId);
+    if (error) console.error("Failed to delete market:", error.message);
   }, []);
 
-  const handleResolve = useCallback((marketId, outcome) => {
-    setMarkets(prev =>
-      prev.map((m) => m.id === marketId ? { ...m, resolved: outcome } : m)
+  const handleResolve = useCallback(async (marketId, outcome) => {
+    // Optimistic update
+    setMarkets((prev) =>
+      prev.map((m) => (m.id === marketId ? { ...m, resolved: outcome } : m))
     );
+
+    const { error } = await supabase
+      .from("markets")
+      .update({ resolved: outcome })
+      .eq("id", marketId);
+    if (error) console.error("Failed to resolve market:", error.message);
   }, []);
 
   const categories = ["All", ...new Set(markets.map((m) => m.category))];
   const filtered = filter === "All" ? markets : markets.filter((m) => m.category === filter);
   const totalVotes = markets.reduce((sum, m) => sum + getTotalVotes(m.votes), 0);
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: "#08081a", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 14 }}>
+      Loading markets...
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: "#08081a", color: "#e8e8f0", fontFamily: "'DM Sans', sans-serif" }}>
@@ -446,7 +491,6 @@ export default function PredictionMarket() {
       <div style={{ position: "fixed", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)", backgroundSize: "60px 60px", pointerEvents: "none", zIndex: 0 }} />
 
       <div style={{ position: "relative", zIndex: 1, maxWidth: 900, margin: "0 auto", padding: "48px 24px 80px" }}>
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 16 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
@@ -468,13 +512,11 @@ export default function PredictionMarket() {
           </button>
         </div>
 
-        {/* Stats */}
         <div style={{ display: "flex", gap: 24, marginBottom: 36, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,255,255,0.3)" }}>
           <span>{markets.length} market{markets.length !== 1 ? "s" : ""}</span>
           <span>{totalVotes} total prediction{totalVotes !== 1 ? "s" : ""}</span>
         </div>
 
-        {/* Category filters */}
         {categories.length > 2 && (
           <div style={{ display: "flex", gap: 8, marginBottom: 32, flexWrap: "wrap" }}>
             {categories.map((cat) => (
@@ -488,7 +530,6 @@ export default function PredictionMarket() {
           </div>
         )}
 
-        {/* Markets */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 20 }}>
           {filtered.map((market) => (
             <MarketCard key={market.id} market={market} userId={userId} onVote={handleVote} onDelete={handleDelete} onResolve={handleResolve} />
