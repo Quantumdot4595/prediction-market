@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase.js";
 
-const DELETE_CONFIRM_TEXT = "delete";
-
 function getUserId() {
   if (typeof window === "undefined") return "user_server";
   let id = localStorage.getItem("prediction-user-id");
@@ -80,14 +78,15 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
   }, [market.expires_at]);
 
   const handleDelete = () => {
-    if (password.trim().toLowerCase() === DELETE_CONFIRM_TEXT) {
+    if (password === "Amoeba") {
       onDelete(market.id);
       setShowDeleteConfirm(false);
       setPassword("");
       setError("");
     } else {
-      setError('Type "delete" to confirm');
+      setError("Incorrect password");
       setTimeout(() => setError(""), 2000);
+      setPassword("");
     }
   };
 
@@ -149,7 +148,7 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
       {showDeleteConfirm && (
         <div style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 10 }}>
-            Type &quot;delete&quot; to confirm
+            Enter password to delete
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <input
@@ -157,7 +156,7 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleDelete()}
-              placeholder='Type "delete"'
+              placeholder="Enter password"
               style={{
                 flex: 1, padding: "8px 12px", borderRadius: 8,
                 border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(255,255,255,0.1)",
@@ -285,6 +284,44 @@ function MarketCard({ market, userId, onVote, onDelete, onResolve }) {
   );
 }
 
+function PasswordGateModal({ onClose, onSuccess, title = "Enter Password" }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = () => {
+    if (password === "Amoeba") {
+      onSuccess();
+    } else {
+      setError("Incorrect password");
+      setTimeout(() => setError(""), 2000);
+      setPassword("");
+    }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 36, width: "100%", maxWidth: 380 }}>
+        <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#e8e8f0", fontFamily: "'DM Sans', sans-serif" }}>{title}</h2>
+        <p style={{ margin: "0 0 24px", fontSize: 13, color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono', monospace" }}>This action is password protected</p>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="Enter password"
+          autoFocus
+          style={{ width: "100%", padding: "14px 16px", borderRadius: 10, border: error ? "1px solid rgba(239,68,68,0.5)" : "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", color: "#e8e8f0", fontSize: 15, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: error ? 8 : 20 }}
+        />
+        {error && <div style={{ color: "#ef4444", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", marginBottom: 16 }}>{error}</div>}
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "11px 24px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "rgba(255,255,255,0.5)", fontSize: 14, fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleSubmit} style={{ padding: "11px 28px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}>Confirm</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CreateMarketModal({ onClose, onCreate }) {
   const [question, setQuestion] = useState("");
   const [category, setCategory] = useState("");
@@ -361,6 +398,7 @@ function CreateMarketModal({ onClose, onCreate }) {
 export default function PredictionMarket() {
   const [markets, setMarkets] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showPasswordForCreate, setShowPasswordForCreate] = useState(false);
   const [filter, setFilter] = useState("All");
   const [loading, setLoading] = useState(true);
   const userId = getUserId();
@@ -503,7 +541,7 @@ export default function PredictionMarket() {
             </h1>
           </div>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => setShowPasswordForCreate(true)}
             style={{ padding: "12px 24px", borderRadius: 12, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", cursor: "pointer", transition: "transform 0.15s ease, box-shadow 0.15s ease", boxShadow: "0 4px 20px rgba(99,102,241,0.3)" }}
             onMouseEnter={(e) => { e.target.style.transform = "translateY(-1px)"; e.target.style.boxShadow = "0 6px 28px rgba(99,102,241,0.4)"; }}
             onMouseLeave={(e) => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 4px 20px rgba(99,102,241,0.3)"; }}
@@ -543,6 +581,13 @@ export default function PredictionMarket() {
         )}
       </div>
 
+      {showPasswordForCreate && (
+        <PasswordGateModal
+          title="Create New Market"
+          onClose={() => setShowPasswordForCreate(false)}
+          onSuccess={() => { setShowPasswordForCreate(false); setShowCreate(true); }}
+        />
+      )}
       {showCreate && <CreateMarketModal onClose={() => setShowCreate(false)} onCreate={handleCreate} />}
     </div>
   );
