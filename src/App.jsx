@@ -403,7 +403,7 @@ export default function PredictionMarket() {
   const [loading, setLoading] = useState(true);
   const userId = getUserId();
 
-  // Load markets from Supabase on mount
+  // Load markets from Supabase on mount, then poll every 2 seconds
   useEffect(() => {
     async function fetchMarkets() {
       const { data, error } = await supabase
@@ -419,6 +419,8 @@ export default function PredictionMarket() {
       setLoading(false);
     }
     fetchMarkets();
+    const poll = setInterval(fetchMarkets, 2000);
+    return () => clearInterval(poll);
   }, []);
 
   // Real-time subscription — updates from ALL users appear instantly
